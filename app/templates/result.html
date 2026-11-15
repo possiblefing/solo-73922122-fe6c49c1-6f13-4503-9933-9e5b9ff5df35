@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>班车停靠事实 · 结果</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <h1>班车停靠事实</h1>
+    <p class="tagline">定位点 → 按站停靠的到离站事实，供刷卡数据按站关联</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card summary">
+    <h2>分析摘要</h2>
+    <div class="stats">
+      <div class="stat"><span class="num">{{ data.summary.optimal_stop_count }}</span><span class="lbl">最优停靠站数</span></div>
+      <div class="stat"><span class="num">{{ data.summary.optimal_assigned_point_count }}</span><span class="lbl">最优归站点数</span></div>
+      <div class="stat ok"><span class="num">{{ data.summary.fact_count }}</span><span class="lbl">已确认事实</span></div>
+      <div class="stat warn"><span class="num">{{ data.summary.pending_count }}</span><span class="lbl">待核</span></div>
+      <div class="stat"><span class="num">{{ data.summary.not_stopped_count }}</span><span class="lbl">未停靠</span></div>
+    </div>
+    <p class="muted small">
+      站点 {{ data.summary.station_count }} 个 · 定位点 {{ data.summary.point_count }} 个 ·
+      优化目标：{{ data.criteria }}
+    </p>
+    {% if data.warnings %}
+    <ul class="warnings">
+      {% for item in data.warnings %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {% if data.summary.has_pending %}
+  <section class="alert notice">
+    <h2>存在待核站点</h2>
+    <p>以下站点在不同同等最优归属下的到离站时刻不一致，<b>未生成事实</b>，仅列出可能时段，需人工核对。</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-head">
+      <h2>停靠事实</h2>
+      <div class="card-tools">
+        <span class="muted small">仅导出已确认事实</span>
+        <button type="button" class="secondary" id="export-facts" {% if not data.facts %}disabled{% endif %}>导出事实 CSV</button>
+      </div>
+    </div>
+    {% if data.facts %}
+    <table>
+      <thead>
+        <tr>
+          <th>站序</th><th>站名</th><th>到站（UTC）</th><th>离站（UTC）</th><th>归站点数</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fact in data.facts %}
+        <tr>
+          <td>{{ fact.route_index }}</td>
+          <td>{{ fact.name }}</td>
+          <td><time datetime="{{ fact.arrival }}">{{ fact.arrival }}</time></td>
+          <td><time datetime="{{ fact.departure }}">{{ fact.departure }}</time></td>
+          <td>{{ fact.point_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">本次没有可确认的停靠事实。</p>
+    {% endif %}
+  </section>
+
+  {% if data.pending %}
+  <section class="card">
+    <h2>待核站点</h2>
+    <p class="muted small">同一最优目标下存在多种归属，到离站时刻不唯一。请结合刷卡或人工复核确定，不要直接当作事实使用。</p>
+    {% for item in data.pending %}
+    <article class="pending-item">
+      <h3>第 {{ item.route_index }} 站 · {{ item.name }}</h3>
+      <p class="muted small">
+        {{ item.reason }}。可能时段共 {{ item.possible_window_count }} 个；
+        到站时刻范围 {{ item.arrival_range.earliest }} — {{ item.arrival_range.latest }}，
+        离站时刻范围 {{ item.departure_range.earliest }} — {{ item.departure_range.latest }}。
+      </p>
+      <table class="compact">
+        <thead><tr><th>可能到站（UTC）</th><th>可能离站（UTC）</th><th>连续定位点</th></tr></thead>
+        <tbody>
+          {% for window in item.possible_windows %}
+          <tr>
+            <td>{{ window.arrival }}</td>
+            <td>{{ window.departure }}</td>
+            <td>{{ window.point_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>未停靠站点</h2>
+    {% if data.not_stopped %}
+    <table class="compact">
+      <thead><tr><th>站序</th><th>站名</th><th>圈内最多连续点</th><th>说明</th></tr></thead>
+      <tbody>
+        {% for item in data.not_stopped %}
+        <tr>
+          <td>{{ item.route_index }}</td>
+          <td>{{ item.name }}</td>
+          <td>{{ item.max_consecutive_points_in_circle }}</td>
+          <td>{{ item.reason }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">所有站点均已纳入最优归属。</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>定位点归属</h2>
+    <details>
+      <summary>展开 {{ data.summary.point_count }} 个定位点</summary>
+      <table class="compact">
+        <thead><tr><th>#</th><th>时刻（UTC）</th><th>纬度</th><th>经度</th><th>已归站</th></tr></thead>
+        <tbody>
+          {% for point in data.points %}
+          <tr class="{{ '' if point.assigned_in_all_facts else 'dim' }}">
+            <td>{{ point.index }}</td>
+            <td>{{ point.time }}</td>
+            <td>{{ "%.6f"|format(point.lat) }}</td>
+            <td>{{ "%.6f"|format(point.lon) }}</td>
+            <td>{{ "是" if point.assigned_in_all_facts else "否" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  <p><a class="link" href="/">← 重新上传</a></p>
+</main>
+
+<script src="/static/app.js"></script>
+<script>
+  // 结果页在前端依据本次分析结果生成“仅含事实”的 CSV，避免二次上传。
+  window.__RESULT__ = {{ data|tojson }};
+</script>
+</body>
+</html>

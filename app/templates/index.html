@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>班车停靠事实 · 上传</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <h1>班车停靠事实</h1>
+    <p class="tagline">定位点 → 按站停靠的到离站事实，供刷卡数据按站关联</p>
+  </div>
+</header>
+
+<main class="wrap">
+  {% if error %}
+  <section class="alert" role="alert">
+    <h2>无法生成停靠事实</h2>
+    <p class="alert-message">{{ error.message }}</p>
+    {% if error.details %}
+    <ul class="alert-details">
+      {% for item in error.details %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    <p class="muted">本次没有输出任何停靠事实。请修正后重新上传。</p>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>上传数据</h2>
+    <form id="upload-form" method="post" action="/analyze" enctype="multipart/form-data" novalidate>
+      <div class="grid">
+        <label class="drop" for="station_file">
+          <span class="drop-title">站点 CSV</span>
+          <span class="drop-hint">列：站名, 纬度, 经度, 半径米<br>按线路顺序逐行排列</span>
+          <input id="station_file" name="station_file" type="file" accept=".csv,text/csv" required>
+          <span class="file-name" data-for="station_file">未选择文件</span>
+        </label>
+        <label class="drop" for="position_file">
+          <span class="drop-title">定位 CSV</span>
+          <span class="drop-hint">列：时刻(UTC), 纬度, 经度<br>时刻严格递增，最多 40 点</span>
+          <input id="position_file" name="position_file" type="file" accept=".csv,text/csv" required>
+          <span class="file-name" data-for="position_file">未选择文件</span>
+        </label>
+      </div>
+      <div class="actions">
+        <button type="submit" id="submit-btn">生成停靠事实</button>
+        <a class="link" href="/samples/stations.csv" download>下载站点样例</a>
+        <a class="link" href="/samples/positions.csv" download>下载定位样例</a>
+      </div>
+      <p class="muted small" id="client-hint" hidden></p>
+    </form>
+  </section>
+
+  <section class="card rules">
+    <h2>判定规则</h2>
+    <ul>
+      <li>每次最多 <b>6</b> 站、<b>40</b> 个时刻严格递增的定位点。</li>
+      <li>按球面（大圆）距离判断站点圈，落在半径内即视为在圈。</li>
+      <li>同一站圈内<b>连续至少 2 条</b>原始定位点才形成一次停靠；每站最多一次，站次不得倒退。</li>
+      <li>一个定位点最多归一个站，且归站的点必须连续。</li>
+      <li>先让停靠站数最多，再让归站点数最多。</li>
+      <li>只有所有同等最优归属的到离站时刻完全一致，才生成该站事实；否则标记<b>待核</b>并列出可能时段。</li>
+      <li>输入错误或没有可用停靠时只说明原因，不输出部分事实。</li>
+    </ul>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
